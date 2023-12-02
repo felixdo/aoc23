@@ -12,38 +12,42 @@
 (defonce cube-re #"(\d+) (green|red|blue)")
 (defonce line-re #"Game (\d+):(.+)")
 
-(defn id-if-possible [line]
-  "returns the game id if the game is possible, 0 otherwise"
+(defn parse-line
+  "turns line into [game-id [rolls]]"
+  [line]
   (let [[_ game-id rolls] (re-matches line-re line)
-        roll-seq (re-seq cube-re rolls)
-        pred (fn [{:strs [red green blue]}]
-               (or
-                (> (or red 0) 12)
-                (> (or green 0) 13)
-                (> (or blue 0) 14)))]
-    (if (some pred (->> roll-seq (map (fn [[_ cubes color]] {color (Integer/parseInt cubes)}))))
-      0
-      (Integer/parseInt game-id)
-      ))
-  )
-
-(defn min-pos [result next]
-  "reduction function that keeps track of the minimum required cubes for each color"
-  (let [color (first (first next))]
-    (update result color (fn [current-min] (max current-min (get next color))))))
-
-(defn cube-power [line]
-  "calculate the power of the minimum cubes required for a line"
-  (let [[_ _ rolls] (re-matches line-re line)
         roll-seq (re-seq cube-re rolls)]
-    (->> roll-seq
-         (map (fn [[_ cubes color]] {color (Integer/parseInt cubes)}))
-         (reduce min-pos {"red" 0 "green" 0 "blue" 0})
-         vals
-         (reduce *)
-         )
-    )
+    [(Integer/parseInt game-id)
+     ;; transducers: https://clojure.org/reference/transducers#_into
+     (into []
+           (comp
+            (map rest)
+            (map (fn [[count color]] { (keyword color) (Integer/parseInt count) })))
+           roll-seq)]))
+
+(defn id-if-possible
+  "evaluates to the game-id if the game is possible, 0 otherwise"
+  [[game-id rolls]]
+  (let [impossible? (fn [{:keys [red green blue] :or {red 0 green 0 blue 0}}]
+                      (or (> red 12)
+                          (> green 13)
+                          (> blue 14)))]
+    (if (some impossible? rolls)
+      0
+      game-id)))
+
+(defn cube-power
+  "calculate the power of the minimum cubes required for a parsed line"
+  [[_ rolls]]
+  (->> rolls
+       (reduce (fn [result next]
+                 (let [[color] (keys next)]
+                   (update result color #(max % (color next)))))
+               {:red 0 :green 0 :blue 0})
+       vals
+       (reduce *)
+       )
   )
 
-"Answers part 1:" (reduce + (map id-if-possible input))
-"Answers part 2:" (reduce + (map cube-power input))
+"Answers part 1:" (reduce + (->> input (map (comp id-if-possible parse-line))))
+"Answers part 2:" (reduce + (->> input (map (comp cube-power parse-line))))
