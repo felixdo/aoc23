@@ -34,14 +34,24 @@
         (apply str))
    (apply str (repeat dim \x))))
 
-#_(get input 13)
 
+(defn inbound [p] (not= \x (get input p)))
 
-#_input
+(defn beam [start]
+  (loop [seen #{}
+         beams [start]]
+    (if-let [b (first beams)]
+      (if (seen b)
+        (recur seen (rest beams))
+        (recur
+         (conj seen b)
+         (apply conj (rest beams) ((:dir-fn b) b))
+         ))
+      (count (into #{} (filter inbound (map :pos seen)))))))
 
 (declare left right up down)
 
-(defn left [{:keys [dim input pos] :as beam} ]
+(defn left [{:keys [pos] :as beam} ]
   (case (get input pos)
     (\- \.) [(update beam :pos dec)]
     \| [(-> beam
@@ -59,8 +69,7 @@
     []
     ))
 
-
-(defn up [{:keys [dim input pos] :as beam}]
+(defn up [{:keys [pos] :as beam}]
   (case (get input pos)
     (\| \.) [(assoc beam :pos (- pos dim))]
     \- [(-> beam
@@ -78,7 +87,7 @@
     []
     ))
 
-(defn down [{:keys [dim input pos] :as beam} ]
+(defn down [{:keys [pos] :as beam} ]
   (case (get input pos)
     (\| \.) [(assoc beam :pos (+ pos dim))]
     \- [(-> beam
@@ -98,7 +107,7 @@
 
 
 
-(defn right [{:keys [dim input pos] :as beam}]
+(defn right [{:keys [pos] :as beam}]
   (case (get input pos)
     (\- \.) [(update beam :pos inc)]
     \| [(-> beam
@@ -117,24 +126,53 @@
     )
   )
 
-(defn zap [beam]
-  (loop [beams [beam]
-         energized #{}
-         ]
-    (let [new-beams (map #(select-keys % [:pos :dir-fn]) beams)
-          new-energized (into energized (map #(select-keys % [:pos :dir-fn]) new-beams))
-          ]
-      (if (= new-energized energized)
-        (count (filter #(not= \x (get input %)) (into #{} (map :pos energized))))
-        (recur
-         (mapcat #((:dir-fn %) %) beams)
-         new-energized
-         ))))
-  )
+(defn starter-beams-left-side []
+  (for [row (range 1 (- dim 1))]
+    {:pos (+ 1 (* dim row)) :dir-fn right}))
 
+(defn starter-beams-right-side []
+  (for [row (range 1 (- dim 1))]
+    {:pos (+ (* dim row) (- dim 2)) :dir-fn left}))
+
+(defn starter-beams-top-side []
+  (for [col (range 1 (- dim 1))]
+    {:pos (+ dim col) :dir-fn down}))
+
+(defn starter-beams-bottom-side []
+  (for [col (range 1 (- dim 1))]
+    {:pos (+ (* dim (- dim 2)) col) :dir-fn up}))
+
+(comment "visual check if we got the starting positions correct...")
+
+(defn draw-board [dim input]
+  (doseq
+      [row (partition dim input)]
+    (println (apply str row)))
+)
+
+(draw-board dim (apply str (apply assoc (apply vector input) (flatten (map (fn [beam] [(:pos beam) \<]) (starter-beams-right-side))))))
+
+(draw-board dim (apply str (apply assoc (apply vector input) (flatten (map (fn [beam] [(:pos beam) \>]) (starter-beams-left-side))))))
+
+(draw-board dim (apply str (apply assoc (apply vector input) (flatten (map (fn [beam] [(:pos beam) \v]) (starter-beams-top-side))))))
+
+(draw-board dim (apply str (apply assoc (apply vector input) (flatten (map (fn [beam] [(:pos beam) \^]) (starter-beams-bottom-side))))))
+
+)
 
 (comment "part 1"
-  (zap {:dim dim :input input :pos 113 :dir-fn right}))
+         (beam {:pos 113 :dir-fn right})
+         )
+
+(comment "part 2"
+(apply max (pmap beam
+                 (concat (starter-beams-left-side)
+                         (starter-beams-right-side)
+                         (starter-beams-top-side)
+                         (starter-beams-bottom-side))
+                 ))
+)
+         
 
 
 
